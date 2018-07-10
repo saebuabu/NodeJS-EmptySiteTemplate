@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/components/jquery/dist/jquery.js"></script>
+    <script src="/components/bootstrap/dist/js/bootstrap.js"></script>
+    <link href="/components/bootstrap/dist/css/bootstrap.css" rel="stylesheet" />
+    <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
+    <style type="text/css">
+        body {
+          padding-top: 50px;
+        }
+        .starter-template {
+          padding: 10px 0px;
+        }
+        #map {
+            height:  500px;
+            width:  100%;
+        }
+        .navbar-header .chat-messages {
+            display:  block;
+            max-height:  1em;
+            xoverflow:  hidden;
+            font-size:  80%;
+        }
+        .navbar-header .chat-messages a {
+            color:  #fff;
+            font-weight:  bold;
+        }
+    </style>
+    <script type="text/javascript">
+
+        // Maak verbinding met de backend
+        var map;
+        var socketHost = document.location.href;
+        var whoami;
+        var myMarker;
+
+        var markerManager = function (map) {
+            var allMarkers = [];
+            var userIx;
+            var markerExists = function (username, lat, lon) {
+                for (x = 0; x < allMarkers.length; x++) {
+                    //per user wordt 1 marker opgeslagen
+                    //dus als de user bestaat dan wordt de marker verplaatst
+                    if (allMarkers[x].username == username) {
+                        userIx = x;
+                        //lijn trekken tussen vorige positie en nieuwe positie
+                        var posprev = allMarkers[x].marker.getLatLng();
+
+                        //if (posprev.lat != lat && posprev.lon != lon) {
+                        var latlngs = [L.latLng(posprev.lat, posprev.lng) , L.latLng(lat, lon) ];
+                        //var latlngs = [L.latLng(lat + 0.001, lon - 0.001), L.latLng(lat, lon)];
+                        var polyline = L.polyline(latlngs, { color: 'red' }).addTo(map);
+                        //}
+
+                        allMarkers[x].marker.setLatLng(L.latLng(
+                                                lat,
+                                                lon));
+
+                        return true;
+                    }
+                }
+                return false;
+            }
+            return {
+                update: function (chatPositions) {
+                    for (y = 0; y < chatPositions.length; y++) {
+                        if (!markerExists(chatPositions[y].username, chatPositions[y].position.lat, chatPositions[y].position.lon)) {
+                            var marker = L.marker([chatPositions[y].position.lat, chatPositions[y].position.lon]).addTo(map);
+                            marker.bindPopup(chatPositions[y].username + " om " + chatPositions[y].time).openPopup();
+                            allMarkers.push({ username: chatPositions[y].username, marker: marker });
+
+                        } else {
+                            //console.log('index user : ' + userIx);
+                            allMarkers[userIx].marker.bindPopup(chatPositions[y].username + " om " + chatPositions[y].time).openPopup();
+                        }
+                    }
+                },
+                debug: function (data) {
+                    for (y = 0; y < data.length; y++) {
+                        console.log(data[y].username);
+                        console.log(data[y].position.lat);
+                        console.log(data[y].position.lon);
+                        console.log(data[y].time);
+
+                    }
+                }
+            }
+        };
+
+        socketHost = socketHost.replace('http://', '');
+        socketHost = socketHost.replace('/', '');
+
+
+        //var socket = io.connect('saebuabu.koding.io:3000');
+        var socket = io.connect(socketHost);
+        changeName();
+
+        // Verander de username van de huidige connectie
+        function changeName() {
+            whoami = prompt('Wie ben je ?');
+            whoami = whoami.replace(/(<([^>]+)>)/ig, "");
+
+            socket.emit('set user', {
+                username: whoami
+            });
+        }
+
+        // Verstuur een bericht
+        function sendMessage() {
+            // Lees de waarde uit het input veld met id `message`
+            var bericht = $('#message').val();
+
+            var bericht = bericht.replace(/(<([^>]+)>)/ig, "");
+            socket.emit('message', {
+                message: bericht
+            });
+            // Reset het veld en focus opnieuw
+            $('#message').val('').focus();
+        }
+
+        // Luister naar binnenkomende berichten
+        socket.on('message', function (data) {
+            // Plak het bericht bovenaan de chatlog
+            $('.chat-messages').prepend(' ' + data.username + ": " + data.message + ' ');
+        });
+
+        // Luister naar binnenkomende posities van anderen
+        socket.on('position', function (data) {
+            //myMarkerManager.debug(data);
+            myMarkerManager.update(data);
+
+        });
+
+
+        var getLocation = function () {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(currentPosCallback);
+            } else {
+                console.log("Geolocation is not supported by this browser.");
+            }
+        }
+
+        var myMarkerManager;
+
+        var currentPosCallback = function (position) {
+
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+            var zoom = 17;
+
+            map = L.map("map").setView([lat, lon], zoom);
+            // Marker plaatsen op huidige locatie
+            myMarkerManager = markerManager(map);
+
+            L.tileLayer("http://{s}.tile.osm.org/{z}/{x}/{y}.png",
+                     {
+                         attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+                     }).addTo(map);
+
+            myMarker = L.marker([lat, lon]).addTo(map);
+            myMarker.bindPopup("Jij: " + whoami + ". Klik op 'positie' om je locatie door te geven.");
+        }
+
+        var sendPosition = function () {
+            navigator.geolocation.getCurrentPosition(broadcastCurrentPos);
+        };
+
+        var broadcastCurrentPos = function (position) {
+            var lat = position.coords.latitude;
+            var lon = position.coords.longitude;
+
+            var d = new Date()
+            var time = d.getHours() + ":" + d.getMinutes();
+            socket.emit('new position', {
+                username: whoami,
+                position: { lat: lat, lon: lon },
+                time: time
+            });
+
+        };
+
+        //Hier begint het allemaal
+        $(function () {
+            // Verander naam wanneer op changeusername knop is geklikt
+            $('#changeusername').click(function () {
+                changeName();
+            });
+
+            // Verstuur bericht wanneer op send knop is geklikt
+            $('#send').click(function () {
+                sendMessage();
+            });
+
+            // Verzend je positie naar iedereen
+            $('#position').click(function () {
+                sendPosition();
+            });
+
+            // Verstuur bericht wanneer op enter is gedrukt binnen het tekstveld
+            $('#message').keypress(function (e) {
+                if (e.which == 13) {
+                    sendMessage();
+                    e.preventDefault();
+                }
+            });
+
+            //Bepaal je eigen positie en zet het op de kaart
+            getLocation();
+        });
+
+    </script>
+</head>
+<body>
+    <!-- Hoofdmenu -->
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="chat-messages navbar-brand" href="#"></a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <div class="starter-template">
+            <form class="form-inline">
+                <div class="form-group">
+                    <!-- Invoer veld -->
+                    <input type="text" class="form-control" placeholder="Bericht" id="message">
+                </div>
+                <!-- Verstuur bericht knop -->
+                <button type="button" id="send" class="btn btn-success">Zend</button>
+                <button type="button" id="position" class="btn btn-success">Positie</button>
+
+            </form>
+        </div>
+        <div id="map"></div>
+    </div>
+
+</body>
+</html>
