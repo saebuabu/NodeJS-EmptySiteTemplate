@@ -53,7 +53,7 @@ app.get("/", function(req, res){
     });
 });
 
-/*
+
 // De socket.io (chatserver)
 io.on('connection', function (socket) {
 
@@ -96,6 +96,5 @@ io.on('connection', function (socket) {
 });
 
 // Start de server op poort 3000
-*/
 server.listen(3000);
 console.log('listening on ' + 3000);
