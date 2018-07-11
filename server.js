@@ -1,4 +1,3 @@
-/*
 // Include alle benodigde modules
 var express = require("express");
 var app = express();
@@ -99,12 +98,13 @@ io.on('connection', function (socket) {
 // Start de server op poort 3000
 server.listen(3000);
 console.log('listening on ' + 3000);
-*/
+/*
 const express = require('express');
 const app = express();
 
 app.get('/', (req, res) => res.send('Hello World!'));
 
 app.listen(3000, () => console.log('Example app listening on port 3000!'));
+*/
 
 
