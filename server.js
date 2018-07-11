@@ -100,11 +100,17 @@ io.on('connection', function (socket) {
 server.listen(3000);
 console.log('listening on ' + 3000);
 */
-const express = require('express');
-const app = express();
 
-app.get('/', (req, res) => res.send('Hello World!'));
+http.createServer(function (request, response) {
+   // Send the HTTP header 
+   // HTTP Status: 200 : OK
+   // Content Type: text/plain
+   response.writeHead(200, {'Content-Type': 'text/plain'});
+   
+   // Send the response body as "Hello World"
+   response.end('Hello World\n');
+}).listen(8081);
 
-app.listen(3000, () => console.log('Example app listening on port 3000!'));
-
+// Console will print the message
+console.log('Server running at port 8081');
 
